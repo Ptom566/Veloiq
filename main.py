@@ -9,15 +9,16 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "SMC Paper Trading Bot is Running!"
+    return "SMC Gold (PAXGUSDT) Paper Trader Active!"
 
 # TELEGRAM CONFIG
 TELEGRAM_BOT_TOKEN = "7991139143:AAGMcCCTmgz_GdGFmwnmmWpWNgqXEv-C9t4"
 TELEGRAM_CHAT_ID = "6340493480"
 
+# FIXED RISK CONFIGURATION ($20 Risk Per Trade)
 RISK_AMOUNT_USD = 20.0
 
-# PUBLIC BINANCE ENDPOINT (NO API KEY NEEDED)
+# PUBLIC BINANCE ENDPOINT (NO API KEY REQUIRED)
 PUBLIC_BASE_URL = "https://fapi.binance.com"
 
 # Active Trades Memory Storage
@@ -36,7 +37,7 @@ def is_ny_18_session():
     ny_time = utc_now - datetime.timedelta(hours=4)
     if ny_time.hour == 18 or (ny_time.hour == 17 and ny_time.minute >= 50):
         return True
-    return True # Always active for paper trading testing
+    return True # Backtest-এর সুবিধার্থে ২৪ ঘণ্টা অন রাখা হলো
 
 def execute_paper_trade(symbol, side, entry_price, sl_price, tp_price):
     price_diff = abs(entry_price - sl_price)
@@ -57,15 +58,15 @@ def execute_paper_trade(symbol, side, entry_price, sl_price, tp_price):
 
     emoji = "🔴" if side == "SELL" else "🟢"
     msg = (
-        f"{emoji} <b>SIMULATED DEMO TRADE EXECUTED!</b>\n\n"
-        f"🪙 <b>Symbol:</b> #{symbol}\n"
+        f"{emoji} <b>GOLD (PAXGUSDT) DEMO TRADE EXECUTED!</b>\n\n"
+        f"🪙 <b>Symbol:</b> Gold (#{symbol})\n"
         f"📊 <b>Side:</b> {side}\n"
-        f"💰 <b>Entry Price:</b> {entry_price}\n"
+        f"💰 <b>Entry Price:</b> ${entry_price}\n"
         f"💵 <b>Risk Amount:</b> ${RISK_AMOUNT_USD}\n"
         f"🔢 <b>Calculated Lot/Qty:</b> {qty}\n"
-        f"🛑 <b>Stop Loss:</b> {sl_price}\n"
-        f"🎯 <b>Take Profit (1:2):</b> {tp_price}\n\n"
-        f"🧪 <i>Paper Trading Mode Active</i>"
+        f"🛑 <b>Stop Loss:</b> ${sl_price}\n"
+        f"🎯 <b>Take Profit (1:2):</b> ${tp_price}\n\n"
+        f"🧪 <i>Gold SMC Backtest Mode Active</i>"
     )
     send_telegram_alert(msg)
 
@@ -82,10 +83,10 @@ def monitor_active_trades(current_price):
         if side == "BUY":
             if current_price >= tp:
                 profit = round(RISK_AMOUNT_USD * 2.0, 2)
-                msg = f"✅ <b>DEMO TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at {current_price}"
+                msg = f"✅ <b>GOLD TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at ${current_price}"
                 send_telegram_alert(msg)
             elif current_price <= sl:
-                msg = f"❌ <b>DEMO TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at {current_price}"
+                msg = f"❌ <b>GOLD TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at ${current_price}"
                 send_telegram_alert(msg)
             else:
                 remaining_trades.append(trade)
@@ -94,17 +95,17 @@ def monitor_active_trades(current_price):
         elif side == "SELL":
             if current_price <= tp:
                 profit = round(RISK_AMOUNT_USD * 2.0, 2)
-                msg = f"✅ <b>DEMO TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at {current_price}"
+                msg = f"✅ <b>GOLD TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at ${current_price}"
                 send_telegram_alert(msg)
             elif current_price >= sl:
-                msg = f"❌ <b>DEMO TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at {current_price}"
+                msg = f"❌ <b>GOLD TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at ${current_price}"
                 send_telegram_alert(msg)
             else:
                 remaining_trades.append(trade)
 
     active_trades = remaining_trades
 
-def scan_ny_smc_setup(symbol="BTCUSDT"):
+def scan_ny_smc_setup(symbol="PAXGUSDT"):
     url = f"{PUBLIC_BASE_URL}/fapi/v1/klines?symbol={symbol}&interval=5m&limit=15"
     try:
         res = requests.get(url, timeout=10).json()
@@ -117,7 +118,7 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
 
         current_close = closes[-1]
         
-        # Monitor ongoing paper trades
+        # Monitor ongoing active trades
         monitor_active_trades(current_close)
 
         # Avoid multiple entries if trade is active
@@ -160,15 +161,17 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
 
 def bot_loop():
     time.sleep(3)
-    send_telegram_alert("🤖 <b>SMC Paper Trader Active (No API Key Required)!</b>")
+    send_telegram_alert("🤖 <b>SMC Gold (PAXGUSDT) Paper Trader Started ($20 Risk)!</b>")
     while True:
-        scan_ny_smc_setup("BTCUSDT")
+        scan_ny_smc_setup("PAXGUSDT") # Only Gold
         time.sleep(300)
 
 if __name__ == '__main__':
-    t = threading.Thread(target=bot_loop)
-    t.daemon = True
-    t.start()
+    # Render Multi-Worker Duplicate Thread Prevention
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        t = threading.Thread(target=bot_loop)
+        t.daemon = True
+        t.start()
     
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
