@@ -1,31 +1,27 @@
 import os
 import time
-import hmac
-import hashlib
 import requests
 import datetime
 import threading
-from urllib.parse import urlencode
 from flask import Flask
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "NY 18:00 SMC Auto-Trader Active!"
+    return "SMC Paper Trading Bot is Running!"
 
 # TELEGRAM CONFIG
 TELEGRAM_BOT_TOKEN = "7991139143:AAGMcCCTmgz_GdGFmwnmmWpWNgqXEv-C9t4"
 TELEGRAM_CHAT_ID = "6340493480"
 
-# FIXED RISK CONFIGURATION ($20 Risk Per Trade)
-RISK_AMOUNT_USD = 20.0 
+RISK_AMOUNT_USD = 20.0
 
-# BINANCE TESTNET API KEYS
-BINANCE_TESTNET_API_KEY = os.environ.get("BINANCE_API_KEY", "YOUR_TESTNET_API_KEY_HERE")
-BINANCE_TESTNET_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "YOUR_TESTNET_SECRET_KEY_HERE")
+# PUBLIC BINANCE ENDPOINT (NO API KEY NEEDED)
+PUBLIC_BASE_URL = "https://fapi.binance.com"
 
-BASE_URL = "https://testnet.binancefuture.com"
+# Active Trades Memory Storage
+active_trades = []
 
 def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -35,97 +31,81 @@ def send_telegram_alert(message):
     except Exception as e:
         print(f"Telegram Error: {e}")
 
-def generate_signature(query_string, secret_key):
-    return hmac.new(secret_key.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-
-def post_order(params):
-    """Binance API order placement handler"""
-    endpoint = "/fapi/v1/order"
-    params["timestamp"] = int(time.time() * 1000)
-    query_string = urlencode(params)
-    signature = generate_signature(query_string, BINANCE_TESTNET_SECRET_KEY)
-    url = f"{BASE_URL}{endpoint}?{query_string}&signature={signature}"
-    headers = {"X-MBX-APIKEY": BINANCE_TESTNET_API_KEY}
-    return requests.post(url, headers=headers, timeout=10).json()
-
-def calculate_quantity(risk_usd, entry_price, sl_price):
-    """Dynamic Quantity/Lot calculation based on $20 risk limit"""
-    price_diff = abs(entry_price - sl_price)
-    if price_diff == 0:
-        return 0.001
-    
-    # Calculate exact quantity to risk $20
-    qty = risk_usd / price_diff
-    return round(qty, 3)
-
-def execute_trade(symbol, side, entry_price, sl_price, tp_price):
-    try:
-        quantity = calculate_quantity(RISK_AMOUNT_USD, entry_price, sl_price)
-        
-        if quantity <= 0:
-            print("Invalid Quantity calculated.")
-            return
-
-        # 1. Market Entry Order
-        entry_params = {
-            "symbol": symbol,
-            "side": side,
-            "type": "MARKET",
-            "quantity": quantity
-        }
-        res_entry = post_order(entry_params)
-
-        if "orderId" in res_entry:
-            exit_side = "SELL" if side == "BUY" else "BUY"
-            
-            # 2. Stop Loss Order
-            sl_params = {
-                "symbol": symbol,
-                "side": exit_side,
-                "type": "STOP_MARKET",
-                "stopPrice": sl_price,
-                "closePosition": "true"
-            }
-            post_order(sl_params)
-
-            # 3. Take Profit Order
-            tp_params = {
-                "symbol": symbol,
-                "side": exit_side,
-                "type": "TAKE_PROFIT_MARKET",
-                "stopPrice": tp_price,
-                "closePosition": "true"
-            }
-            post_order(tp_params)
-
-            emoji = "🔴" if side == "SELL" else "🟢"
-            msg = (
-                f"{emoji} <b>NY 18:00 SMC TRADE EXECUTED!</b>\n\n"
-                f"🪙 <b>Symbol:</b> #{symbol}\n"
-                f"📊 <b>Side:</b> {side}\n"
-                f"💵 <b>Risk Amount:</b> ${RISK_AMOUNT_USD}\n"
-                f"🔢 <b>Calculated Qty:</b> {quantity}\n"
-                f"🛑 <b>Stop Loss:</b> {sl_price}\n"
-                f"🎯 <b>1:2 TP:</b> {tp_price}\n\n"
-                f"⚡ <i>Entry, SL & TP Placed with Auto Risk Control!</i>"
-            )
-            send_telegram_alert(msg)
-            print(f"Trade Success: {symbol} - {side} | Qty: {quantity}")
-        else:
-            print(f"Trade Order Failed: {res_entry}")
-    except Exception as e:
-        print(f"API Error: {e}")
-
 def is_ny_18_session():
     utc_now = datetime.datetime.utcnow()
     ny_time = utc_now - datetime.timedelta(hours=4)
-    
     if ny_time.hour == 18 or (ny_time.hour == 17 and ny_time.minute >= 50):
         return True
-    return True # Set to True for paper trading test mode
+    return True # Always active for paper trading testing
+
+def execute_paper_trade(symbol, side, entry_price, sl_price, tp_price):
+    price_diff = abs(entry_price - sl_price)
+    if price_diff == 0:
+        return
+    
+    qty = round(RISK_AMOUNT_USD / price_diff, 3)
+    
+    trade = {
+        "symbol": symbol,
+        "side": side,
+        "entry": entry_price,
+        "sl": sl_price,
+        "tp": tp_price,
+        "qty": qty
+    }
+    active_trades.append(trade)
+
+    emoji = "🔴" if side == "SELL" else "🟢"
+    msg = (
+        f"{emoji} <b>SIMULATED DEMO TRADE EXECUTED!</b>\n\n"
+        f"🪙 <b>Symbol:</b> #{symbol}\n"
+        f"📊 <b>Side:</b> {side}\n"
+        f"💰 <b>Entry Price:</b> {entry_price}\n"
+        f"💵 <b>Risk Amount:</b> ${RISK_AMOUNT_USD}\n"
+        f"🔢 <b>Calculated Lot/Qty:</b> {qty}\n"
+        f"🛑 <b>Stop Loss:</b> {sl_price}\n"
+        f"🎯 <b>Take Profit (1:2):</b> {tp_price}\n\n"
+        f"🧪 <i>Paper Trading Mode Active</i>"
+    )
+    send_telegram_alert(msg)
+
+def monitor_active_trades(current_price):
+    global active_trades
+    remaining_trades = []
+    
+    for trade in active_trades:
+        side = trade["side"]
+        sl = trade["sl"]
+        tp = trade["tp"]
+        
+        # Check Win/Loss for BUY
+        if side == "BUY":
+            if current_price >= tp:
+                profit = round(RISK_AMOUNT_USD * 2.0, 2)
+                msg = f"✅ <b>DEMO TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at {current_price}"
+                send_telegram_alert(msg)
+            elif current_price <= sl:
+                msg = f"❌ <b>DEMO TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at {current_price}"
+                send_telegram_alert(msg)
+            else:
+                remaining_trades.append(trade)
+                
+        # Check Win/Loss for SELL
+        elif side == "SELL":
+            if current_price <= tp:
+                profit = round(RISK_AMOUNT_USD * 2.0, 2)
+                msg = f"✅ <b>DEMO TRADE WON (+${profit})!</b>\nSymbol: #{trade['symbol']}\nTarget Hit at {current_price}"
+                send_telegram_alert(msg)
+            elif current_price >= sl:
+                msg = f"❌ <b>DEMO TRADE HIT SL (-${RISK_AMOUNT_USD})!</b>\nSymbol: #{trade['symbol']}\nSL Hit at {current_price}"
+                send_telegram_alert(msg)
+            else:
+                remaining_trades.append(trade)
+
+    active_trades = remaining_trades
 
 def scan_ny_smc_setup(symbol="BTCUSDT"):
-    url = f"{BASE_URL}/fapi/v1/klines?symbol={symbol}&interval=5m&limit=15"
+    url = f"{PUBLIC_BASE_URL}/fapi/v1/klines?symbol={symbol}&interval=5m&limit=15"
     try:
         res = requests.get(url, timeout=10).json()
         if len(res) < 15:
@@ -136,6 +116,13 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
         lows = [float(k[3]) for k in res]
 
         current_close = closes[-1]
+        
+        # Monitor ongoing paper trades
+        monitor_active_trades(current_close)
+
+        # Avoid multiple entries if trade is active
+        if len(active_trades) > 0:
+            return
 
         swing_high = max(highs[-12:-4])
         swing_low = min(lows[-12:-4])
@@ -151,7 +138,7 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
             risk = sl - current_close
             if risk > 0:
                 tp = round(current_close - (risk * 2.0), 2)
-                execute_trade(symbol, "SELL", current_close, sl, tp)
+                execute_paper_trade(symbol, "SELL", current_close, sl, tp)
                 return
 
         # Fake Move DOWN -> Upside MSS -> BUY Setup
@@ -165,7 +152,7 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
             risk = current_close - sl
             if risk > 0:
                 tp = round(current_close + (risk * 2.0), 2)
-                execute_trade(symbol, "BUY", current_close, sl, tp)
+                execute_paper_trade(symbol, "BUY", current_close, sl, tp)
                 return
 
     except Exception as e:
@@ -173,7 +160,7 @@ def scan_ny_smc_setup(symbol="BTCUSDT"):
 
 def bot_loop():
     time.sleep(3)
-    send_telegram_alert("🤖 <b>NY 18:00 SMC Auto-Trader Started ($20 Fixed Risk)!</b>")
+    send_telegram_alert("🤖 <b>SMC Paper Trader Active (No API Key Required)!</b>")
     while True:
         scan_ny_smc_setup("BTCUSDT")
         time.sleep(300)
