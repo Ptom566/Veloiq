@@ -4,7 +4,7 @@ import threading
 import os
 from flask import Flask
 
-# Flask Server for Render Health Check
+# --- Flask Web Server ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -15,7 +15,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# TELEGRAM BOT LOGIC
+# --- TELEGRAM BOT LOGIC ---
 TELEGRAM_BOT_TOKEN = "7991139143:AAGMcCCTmgz_GdGFmwnmmWpWNgqXEv-C9t4"
 TELEGRAM_CHAT_ID = "6340493480"
 
@@ -53,13 +53,16 @@ def check_binance_oi():
         print(f"Error: {e}")
 
 def bot_loop():
+    # ২ সেকেন্ড অপেক্ষা করে স্টার্টআপ মেসেজ পাঠাবে
+    time.sleep(2)
     send_telegram_alert("🤖 <b>Crypto Scanner Bot Started Successfully on Render!</b>")
     while True:
         check_binance_oi()
         time.sleep(300)
 
 if __name__ == '__main__':
-    t = threading.Thread(target=bot_loop)
-    t.daemon = True
-    t.start()
+    # ১. আগে ব্যাকগ্রাউন্ডে টেলিগ্রাম বোট প্রসেস স্টার্ট হবে
+    threading.Thread(target=bot_loop, daemon=True).start()
+    
+    # ২. তারপর ওয়েবাসার্ভার রান করবে
     run_flask()
