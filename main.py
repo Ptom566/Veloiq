@@ -1,21 +1,7 @@
 import requests
 import time
-import threading
-import os
-from flask import Flask
 
-# --- Flask Web Server ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running 24/7!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-# --- TELEGRAM BOT LOGIC ---
+# --- TELEGRAM BOT CONFIG ---
 TELEGRAM_BOT_TOKEN = "7991139143:AAGMcCCTmgz_GdGFmwnmmWpWNgqXEv-C9t4"
 TELEGRAM_CHAT_ID = "6340493480"
 
@@ -23,7 +9,8 @@ def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10)
+        print(f"Telegram API Response: {response.status_code}")
     except Exception as e:
         print(f"Error sending alert: {e}")
 
@@ -39,6 +26,7 @@ def check_binance_oi():
                     price_change = float(coin.get("priceChangePercent", 0))
                     volume = float(coin.get("quoteVolume", 0))
                     
+                    # High Volume Accumulation Condition
                     if volume >= 50000000 and abs(price_change) <= 2.0:
                         msg = (
                             f"🚨 <b>SMART MONEY ACCUMULATION ALERT!</b>\n\n"
@@ -50,19 +38,12 @@ def check_binance_oi():
                         send_telegram_alert(msg)
                         print(f"Alert Sent for {symbol}!")
     except Exception as e:
-        print(f"Error: {e}")
-
-def bot_loop():
-    # ২ সেকেন্ড অপেক্ষা করে স্টার্টআপ মেসেজ পাঠাবে
-    time.sleep(2)
-    send_telegram_alert("🤖 <b>Crypto Scanner Bot Started Successfully on Render!</b>")
-    while True:
-        check_binance_oi()
-        time.sleep(300)
+        print(f"Error fetching Binance data: {e}")
 
 if __name__ == '__main__':
-    # ১. আগে ব্যাকগ্রাউন্ডে টেলিগ্রাম বোট প্রসেস স্টার্ট হবে
-    threading.Thread(target=bot_loop, daemon=True).start()
+    print("Starting Bot Loop...")
+    send_telegram_alert("🤖 <b>Crypto Scanner Bot Started Successfully on Render!</b>")
     
-    # ২. তারপর ওয়েবাসার্ভার রান করবে
-    run_flask()
+    while True:
+        check_binance_oi()
+        time.sleep(300) # Check every 5 minutes
