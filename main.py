@@ -1,7 +1,21 @@
 import requests
 import time
+import threading
+import os
+from flask import Flask
 
-# --- TELEGRAM BOT CONFIG ---
+# Flask Server for Render Health Check
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is active and running 24/7!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# TELEGRAM BOT LOGIC
 TELEGRAM_BOT_TOKEN = "7991139143:AAGMcCCTmgz_GdGFmwnmmWpWNgqXEv-C9t4"
 TELEGRAM_CHAT_ID = "6340493480"
 
@@ -9,8 +23,7 @@ def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        print(f"Telegram API Response: {response.status_code}")
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print(f"Error sending alert: {e}")
 
@@ -26,7 +39,6 @@ def check_binance_oi():
                     price_change = float(coin.get("priceChangePercent", 0))
                     volume = float(coin.get("quoteVolume", 0))
                     
-                    # High Volume Accumulation Condition
                     if volume >= 50000000 and abs(price_change) <= 2.0:
                         msg = (
                             f"🚨 <b>SMART MONEY ACCUMULATION ALERT!</b>\n\n"
@@ -38,12 +50,20 @@ def check_binance_oi():
                         send_telegram_alert(msg)
                         print(f"Alert Sent for {symbol}!")
     except Exception as e:
-        print(f"Error fetching Binance data: {e}")
+        print(f"Error: {e}")
 
-if __name__ == '__main__':
-    print("Starting Bot Loop...")
+def bot_loop():
+    time.sleep(3)
     send_telegram_alert("🤖 <b>Crypto Scanner Bot Started Successfully on Render!</b>")
-    
     while True:
         check_binance_oi()
-        time.sleep(300) # Check every 5 minutes
+        time.sleep(300)
+
+if __name__ == '__main__':
+    # Start bot in background thread
+    t = threading.Thread(target=bot_loop)
+    t.daemon = True
+    t.start()
+    
+    # Start Flask Web Server on main thread
+    run_flask()
